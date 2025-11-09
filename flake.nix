@@ -17,13 +17,13 @@
         cargoLock = {
           lockFile = ./Cargo.lock;
         };
-        nativeBuildInputs = [ pkg-config ];
-        buildInputs = [ systemd xorg.libX11 xorg.libXtst libinput slurp ];
+        depsBuildBuild = [ pkg-config xorg.libX11 xorg.libXtst systemd libinput ];
+        depsHostHost = [ slurp ];
       };
 
       devShells."x86_64-linux".default = mkShell {
-        nativeBuildInputs = [ pkg-config ];
-        buildInputs = [ systemd xorg.libX11 xorg.libXtst libinput slurp ];
+        depsBuildBuild = [ pkg-config xorg.libX11 xorg.libXtst systemd libinput ];
+        depsHostHost = [ slurp ];
       };
     };
 }
