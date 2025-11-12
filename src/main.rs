@@ -177,6 +177,7 @@ fn init() {
             init();
         }),
     );
+    mki::bind_key(mki::Keyboard::F2, Action::handle_kb(|_| exit(0)));
 }
 
 fn main() {
