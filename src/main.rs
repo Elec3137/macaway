@@ -1,6 +1,6 @@
 use std::{
     error::Error,
-    process::Command,
+    process::{Command, exit},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use mki::Action;
+use mki::{Action, Keyboard};
 
 /// Gets the cordinates of the next mouse click
 /// by launching `slurp` (which overlays the screen)
@@ -142,9 +142,18 @@ fn play_macro(
     macro_vec: Vec<(Option<mki::Keyboard>, Option<(mki::Mouse, u16, u16)>)>,
 ) -> Result<(), Box<dyn Error>> {
     eprintln!("excecuting macro");
+
+    let mut held_keys = Vec::<Keyboard>::new();
     for i in macro_vec {
         if let Some(key) = i.0 {
-            key.click();
+            if key == Keyboard::LeftControl {
+                key.press();
+                held_keys.push(key);
+            } else {
+                key.click();
+                held_keys.iter().for_each(|key| key.release());
+                held_keys.clear();
+            }
         } else if let Some(button) = i.1 {
             Ydotool::move_mouse(button.1, button.2)?;
             thread::sleep(Duration::from_millis(100));
