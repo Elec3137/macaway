@@ -18,12 +18,12 @@
           lockFile = ./Cargo.lock;
         };
         depsBuildBuild = [ pkg-config xorg.libX11 xorg.libXtst systemd libinput ];
-        depsHostHost = [ slurp ];
+        depsHostHost = [ slurp ydotool ];
       };
 
       devShells."x86_64-linux".default = mkShell {
         depsBuildBuild = [ pkg-config xorg.libX11 xorg.libXtst systemd libinput ];
-        depsHostHost = [ slurp ];
+        depsHostHost = [ slurp ydotool ];
       };
     };
 }
