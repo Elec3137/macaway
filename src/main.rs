@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use mki::{Action, Keyboard};
+use mki::{Action, Keyboard, Mouse};
 
 /// Gets the cordinates of the next mouse click
 /// by launching `slurp` (which overlays the screen)
@@ -97,11 +97,10 @@ fn unbind_all() {
     mki::remove_key_bind(mki::Keyboard::F1);
 }
 
-fn record_macro()
--> Result<Vec<(Option<mki::Keyboard>, Option<(mki::Mouse, u16, u16)>)>, Box<dyn Error>> {
+fn record_macro() -> Result<Vec<(Option<Keyboard>, Option<(Mouse, u16, u16)>)>, Box<dyn Error>> {
     let stuff = Arc::new(Mutex::new(Vec::<(
-        Option<mki::Keyboard>,
-        Option<(mki::Mouse, u16, u16)>,
+        Option<Keyboard>,
+        Option<(Mouse, u16, u16)>,
     )>::new()));
     let stuff_clone = stuff.clone();
     let stuff_clone1 = stuff.clone();
@@ -122,10 +121,10 @@ fn record_macro()
         },
     ));
     mki::bind_any_key(Action::sequencing_kb(move |key| {
-        if key == mki::Keyboard::Escape && ignore_esc_clone.load(Ordering::SeqCst) {
+        if key == Keyboard::Escape && ignore_esc_clone.load(Ordering::SeqCst) {
             eprintln!("Ignoring Escape key (slurp cancel keybind)");
             ignore_esc_clone.store(false, Ordering::SeqCst);
-        } else if key == mki::Keyboard::F1 {
+        } else if key == Keyboard::F1 {
             unbind_all();
             sender.send(0).unwrap();
         } else {
@@ -139,7 +138,7 @@ fn record_macro()
 }
 
 fn play_macro(
-    macro_vec: Vec<(Option<mki::Keyboard>, Option<(mki::Mouse, u16, u16)>)>,
+    macro_vec: Vec<(Option<Keyboard>, Option<(Mouse, u16, u16)>)>,
 ) -> Result<(), Box<dyn Error>> {
     eprintln!("excecuting macro");
 
@@ -165,7 +164,7 @@ fn play_macro(
 
 fn init() {
     mki::bind_key(
-        mki::Keyboard::F1,
+        Keyboard::F1,
         Action::handle_kb(|_| {
             unbind_all();
 
@@ -177,7 +176,7 @@ fn init() {
             init();
         }),
     );
-    mki::bind_key(mki::Keyboard::F2, Action::handle_kb(|_| exit(0)));
+    mki::bind_key(Keyboard::F2, Action::handle_kb(|_| exit(0)));
 }
 
 fn main() {
