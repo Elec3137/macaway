@@ -133,6 +133,8 @@ fn test() {
 }
 
 fn main() {
+    let _ydotool: Ydotool;
+
     let mut args = std::env::args();
     if let Some(action) = args.nth(1) {
         match action.as_str() {
@@ -149,7 +151,8 @@ fn main() {
             }
             "play" => {
                 // FIXME: possible race condition if the daemon doesn't start before the macro starts playing
-                Ydotool::start_daemon().unwrap();
+                _ydotool = Ydotool::start_daemon().unwrap();
+                thread::sleep(Duration::from_secs(1));
 
                 let file;
                 {
@@ -162,7 +165,7 @@ fn main() {
             _ => eprintln!("Unimplemented argument; chose one of: 'record', 'play'"),
         }
     } else {
-        Ydotool::start_daemon().unwrap();
+        _ydotool = Ydotool::start_daemon().unwrap();
         test();
         thread::sleep(Duration::MAX);
     }

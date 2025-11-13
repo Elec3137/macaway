@@ -1,12 +1,21 @@
-use std::{error::Error, process::Command, thread, time::Duration};
+use std::{
+    error::Error,
+    process::{Child, Command},
+    thread,
+    time::Duration,
+};
 
-pub struct Ydotool {}
+pub struct Ydotool {
+    daemon_handler: Child,
+}
 
 #[allow(dead_code)]
 impl Ydotool {
-    pub fn start_daemon() -> Result<(), Box<dyn Error>> {
-        Command::new("ydotoold").spawn()?;
-        Ok(())
+    pub fn start_daemon() -> Result<Self, Box<dyn Error>> {
+        let handler = Command::new("ydotoold").spawn()?;
+        Ok(Ydotool {
+            daemon_handler: handler,
+        })
     }
 
     fn reset_mouse_pos() -> Result<(), Box<dyn Error>> {
@@ -47,5 +56,12 @@ impl Ydotool {
         Ydotool::click()?;
 
         Ok(())
+    }
+}
+
+impl Drop for Ydotool {
+    fn drop(&mut self) {
+        #[allow(unused_must_use)]
+        self.daemon_handler.kill();
     }
 }
