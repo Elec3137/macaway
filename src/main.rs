@@ -1,5 +1,7 @@
 use std::{
     error::Error,
+    fs::File,
+    path::Path,
     process::{Command, exit},
     sync::{
         Arc, Mutex,
@@ -113,7 +115,7 @@ fn play_macro(
     Ok(())
 }
 
-fn init() {
+fn test() {
     mki::bind_key(
         Keyboard::F1,
         Action::handle_kb(|_| {
@@ -124,14 +126,43 @@ fn init() {
 
             play_macro(macro_vec).unwrap();
 
-            init();
+            test();
         }),
     );
     mki::bind_key(Keyboard::F2, Action::handle_kb(|_| exit(0)));
 }
 
 fn main() {
-    Ydotool::start_daemon().unwrap();
-    init();
-    thread::sleep(Duration::MAX);
+    let mut args = std::env::args();
+    if let Some(action) = args.nth(1) {
+        match action.as_str() {
+            "record" => {
+                let file;
+                {
+                    let path_str = args.nth(1).unwrap_or("default".to_string()) + ".json";
+                    let path = Path::new(&path_str);
+                    file = File::create(path).unwrap(); // FIXME: use create_new to prevent overwriting of important macros
+                }
+
+                serde_json::to_writer(file, &record_macro().unwrap()).unwrap();
+            }
+            "play" => {
+                // FIXME: possible race condition if the daemon doesn't start before the macro starts playing
+                Ydotool::start_daemon().unwrap();
+
+                let file;
+                {
+                    let path_str = args.nth(1).unwrap_or("default".to_string()) + ".json";
+                    let path = Path::new(&path_str);
+                    file = File::open(path).unwrap();
+                }
+                play_macro(serde_json::from_reader(file).unwrap()).unwrap()
+            }
+            _ => eprintln!("Unimplemented argument; chose one of: 'record', 'play'"),
+        }
+    } else {
+        Ydotool::start_daemon().unwrap();
+        test();
+        thread::sleep(Duration::MAX);
+    }
 }
