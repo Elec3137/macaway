@@ -136,6 +136,7 @@ fn main() {
     let mut args = std::env::args();
     if let Some(action) = args.nth(1) {
         match action.as_str() {
+            // FIXME: consider binding the beginning of these actions to a key, ie "F1"
             "record" => {
                 let file;
                 {
