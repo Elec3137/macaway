@@ -35,13 +35,11 @@ fn get_next_mouseclick_cords() -> Result<(u16, u16), Box<dyn Error>> {
             .ok_or("Failed to find whitespace in slurp output")?,
     );
 
-    let (x, y) = stdout.split_at(
-        stdout
-            .find(',')
-            .ok_or("Failed to find comma in slurp output")?,
-    );
+    let (x, y) = stdout
+        .split_once(',')
+        .ok_or("Failed to find comma in slurp output")?;
 
-    Ok((x.parse()?, y.replace(",", "").parse()?))
+    Ok((x.parse()?, y.parse()?))
 }
 
 fn unbind_all() {
