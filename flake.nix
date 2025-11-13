@@ -11,7 +11,7 @@
     with pkgs;
     {
       packages."x86_64-linux".default = rustPlatform.buildRustPackage {
-        pname = "macro-recorder";
+        pname = "macaway";
         version = self.shortRev or self.dirtyShortRev;
         src = ./.;
         cargoLock = {
