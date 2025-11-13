@@ -12,6 +12,9 @@ use std::{
 
 use mki::{Action, Keyboard, Mouse};
 
+mod ydotool;
+use ydotool::Ydotool;
+
 /// Gets the cordinates of the next mouse click
 /// by launching `slurp` (which overlays the screen)
 fn get_next_mouseclick_cords() -> Result<(u16, u16), Box<dyn Error>> {
@@ -39,56 +42,6 @@ fn get_next_mouseclick_cords() -> Result<(u16, u16), Box<dyn Error>> {
     );
 
     Ok((x.parse()?, y.replace(",", "").parse()?))
-}
-
-struct Ydotool {}
-
-#[allow(dead_code)]
-impl Ydotool {
-    fn start_daemon() -> Result<(), Box<dyn Error>> {
-        Command::new("ydotoold").spawn()?;
-        Ok(())
-    }
-
-    fn reset_mouse_pos() -> Result<(), Box<dyn Error>> {
-        Command::new("ydotool")
-            .args(["mousemove", "--absolute", "-x", "0", "-y", "0"])
-            .spawn()?
-            .wait()?;
-        Ok(())
-    }
-    fn move_mouse(x: u16, y: u16) -> Result<(), Box<dyn Error>> {
-        Ydotool::reset_mouse_pos()?;
-
-        thread::sleep(Duration::from_millis(100));
-
-        Command::new("ydotool")
-            .args([
-                "mousemove",
-                "-x",
-                &format!("{}", x / 2),
-                "-y",
-                &format!("{}", y / 2),
-            ])
-            .spawn()?
-            .wait()?;
-
-        Ok(())
-    }
-
-    fn click() -> Result<(), Box<dyn Error>> {
-        Command::new("ydotool")
-            .args(["click", "C0"])
-            .spawn()?
-            .wait()?;
-        Ok(())
-    }
-    fn click_at(x: u16, y: u16) -> Result<(), Box<dyn Error>> {
-        Ydotool::move_mouse(x, y)?;
-        Ydotool::click()?;
-
-        Ok(())
-    }
 }
 
 fn unbind_all() {
