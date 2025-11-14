@@ -17,7 +17,7 @@
         cargoLock = {
           lockFile = ./Cargo.lock;
         };
-        depsBuildBuild = [ pkg-config xorg.libX11 xorg.libXtst systemd ];
+        depsBuildBuild = [ pkg-config xorg.libX11 xorg.libXtst systemd libinput ];
         depsHostHost = [ slurp ydotool libinput ];
       };
 
