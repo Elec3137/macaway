@@ -1,7 +1,7 @@
 use std::{
     error::Error,
     fs::File,
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, exit},
     sync::{
         Arc, Mutex,
@@ -140,15 +140,12 @@ fn main() {
 
     let mut args = std::env::args();
     if let Some(action) = args.nth(1) {
+        let macro_path = PathBuf::from(args.nth(1).unwrap_or("default".to_string()) + ".json");
+
         match action.as_str() {
             // FIXME: consider binding the beginning of these actions to a key, ie "F1"
             "record" => {
-                let file;
-                {
-                    let path_str = args.nth(1).unwrap_or("default".to_string()) + ".json";
-                    let path = Path::new(&path_str);
-                    file = File::create(path).unwrap(); // FIXME: use create_new to prevent overwriting of important macros
-                }
+                let file = File::create(macro_path).unwrap(); // FIXME: use create_new to prevent overwriting of important macros
 
                 serde_json::to_writer(file, &record_macro().unwrap()).unwrap();
             }
@@ -157,12 +154,7 @@ fn main() {
                 _ydotool = Ydotool::start_daemon().unwrap();
                 thread::sleep(Duration::from_secs(1));
 
-                let file;
-                {
-                    let path_str = args.nth(1).unwrap_or("default".to_string()) + ".json";
-                    let path = Path::new(&path_str);
-                    file = File::open(path).unwrap();
-                }
+                let file = File::open(macro_path).unwrap();
                 play_macro(serde_json::from_reader(file).unwrap()).unwrap()
             }
             _ => eprintln!("Unimplemented argument; chose one of: 'record', 'play'"),
