@@ -1,7 +1,7 @@
 use std::{
     error::Error,
     fs::File,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Command, exit},
     sync::{
         Arc, Mutex,
@@ -59,7 +59,7 @@ fn record_macro() -> Result<Vec<(Option<Keyboard>, Option<(Mouse, u16, u16)>)>, 
     let ignore_esc = Arc::new(AtomicBool::new(false));
     let ignore_esc_ref = ignore_esc.clone();
 
-    let (sender, receiver) = channel();
+    let (completion_sender, complation_receiver) = channel();
 
     let macro_vec_ref1 = macro_vec_mutex.clone();
     mki::bind_any_button(Action::sequencing_mouse(
@@ -82,14 +82,14 @@ fn record_macro() -> Result<Vec<(Option<Keyboard>, Option<(Mouse, u16, u16)>)>, 
             ignore_esc_ref.store(false, Ordering::SeqCst);
         } else if key == Keyboard::F1 {
             unbind_all();
-            sender.send(0).unwrap();
+            completion_sender.send(0).unwrap();
         } else {
             macro_vec_ref2.lock().unwrap().push((Some(key), None));
             println!("Keyboard key pressed {:?}", key);
         }
     }));
 
-    receiver.recv()?;
+    complation_receiver.recv()?;
     Ok(macro_vec_mutex.lock().unwrap().to_vec())
 }
 
@@ -136,31 +136,48 @@ fn test() {
 }
 
 fn main() {
-    let _ydotool: Ydotool;
-
     let mut args = std::env::args();
     if let Some(action) = args.nth(1) {
         let macro_path = PathBuf::from(args.nth(1).unwrap_or("default".to_string()) + ".json");
+        let (completion_sender, completion_reciever) = channel();
+        let _ydotool;
 
         match action.as_str() {
-            // FIXME: consider binding the beginning of these actions to a key, ie "F1"
             "record" => {
-                let file = File::create(macro_path).unwrap(); // FIXME: use create_new to prevent overwriting of important macros
+                let file = File::create(&macro_path).unwrap(); // FIXME: use create_new to prevent overwriting of important macros
 
-                serde_json::to_writer(file, &record_macro().unwrap()).unwrap();
+                mki::bind_key(
+                    Keyboard::F1,
+                    Action::handle_kb(move |_| {
+                        serde_json::to_writer(&file, &record_macro().unwrap()).unwrap();
+                        completion_sender.send(0).unwrap();
+                    }),
+                );
             }
             "play" => {
                 // FIXME: possible race condition if the daemon doesn't start before the macro starts playing
                 _ydotool = Ydotool::start_daemon().unwrap();
                 thread::sleep(Duration::from_secs(1));
 
-                let file = File::open(macro_path).unwrap();
-                play_macro(serde_json::from_reader(file).unwrap()).unwrap()
+                let file = File::open(&macro_path).unwrap();
+                mki::bind_key(
+                    Keyboard::F1,
+                    Action::handle_kb(move |_| {
+                        play_macro(serde_json::from_reader(&file).unwrap()).unwrap();
+                        completion_sender.send(0).unwrap();
+                    }),
+                );
             }
-            _ => eprintln!("Unimplemented argument; chose one of: 'record', 'play'"),
+            _ => {
+                eprintln!("Unimplemented argument; chose one of: 'record', 'play'");
+                exit(1);
+            }
         }
+
+        println!("Ready; Press F1 to start");
+        completion_reciever.recv().unwrap();
     } else {
-        _ydotool = Ydotool::start_daemon().unwrap();
+        let _ydotool = Ydotool::start_daemon().unwrap();
         test();
         thread::sleep(Duration::MAX);
     }
