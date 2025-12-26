@@ -55,32 +55,31 @@ fn unbind_all() {
 
 fn record_macro() -> Result<Vec<MacroItem>, mpsc::RecvError> {
     let macro_vec_mutex = Arc::new(Mutex::new(Vec::<MacroItem>::new()));
-
-    let ignore_esc = Arc::new(AtomicBool::new(false));
-    let ignore_esc_ref = ignore_esc.clone();
-
     let (completion_sender, complation_receiver) = mpsc::channel();
 
+    let use_click = Arc::new(AtomicBool::new(true));
     let macro_vec_ref1 = macro_vec_mutex.clone();
-    mki::bind_any_button(mki::Action::sequencing_mouse(
-        move |button| match get_next_mouseclick_cords() {
-            Ok((x, y)) => {
-                macro_vec_ref1
-                    .lock()
-                    .unwrap()
-                    .push(MacroItem::Mouse(button, x, y));
-                println!("Mouse button pressed {:?} at {},{}", button, x, y);
-                ignore_esc.store(true, Ordering::SeqCst);
+    mki::bind_any_button(mki::Action::sequencing_mouse(move |button| {
+        if use_click.load(Ordering::SeqCst) {
+            match get_next_mouseclick_cords() {
+                Ok((x, y)) => {
+                    macro_vec_ref1
+                        .lock()
+                        .unwrap()
+                        .push(MacroItem::Mouse(button, x, y));
+                    println!("Mouse button pressed {:?} at {},{}", button, x, y);
+                    use_click.store(false, Ordering::SeqCst);
+                }
+                Err(e) => eprintln!("Ignoring mouse click: {}", e),
             }
-            Err(e) => eprintln!("Ignoring mouse click: {}", e),
-        },
-    ));
+        } else {
+            use_click.store(true, Ordering::SeqCst);
+        }
+    }));
+
     let macro_vec_ref2 = macro_vec_mutex.clone();
     mki::bind_any_key(mki::Action::sequencing_kb(move |key| {
-        if key == mki::Keyboard::Escape && ignore_esc_ref.load(Ordering::SeqCst) {
-            eprintln!("Ignoring Escape key (slurp cancel keybind)");
-            ignore_esc_ref.store(false, Ordering::SeqCst);
-        } else if key == mki::Keyboard::F1 {
+        if key == mki::Keyboard::F1 {
             unbind_all();
             completion_sender.send(0).unwrap();
         } else {
