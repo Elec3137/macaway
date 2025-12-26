@@ -34,14 +34,13 @@
 
         buildInputs = [
           slurp
-          ydotool
 
           libinput
         ];
 
         postFixup = ''
           wrapProgram $out/bin/${pname} \
-            --prefix PATH : ${lib.makeBinPath [ slurp ydotool ]} \
+            --prefix PATH : ${lib.makeBinPath [ slurp ]} \
             --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ libinput ]}
         '';
       };

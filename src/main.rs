@@ -12,18 +12,15 @@ use std::{
     time::Duration,
 };
 
-mod ydotool;
-use ydotool::Ydotool;
-
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 enum MacroItem {
-    Mouse(mki::Mouse, u16, u16),
+    Mouse(mki::Mouse, i32, i32),
     Key(mki::Keyboard),
 }
 
 /// Gets the cordinates of the next mouse click
 /// by launching `slurp` (which overlays the screen)
-fn get_next_mouseclick_cords() -> Result<(u16, u16), Box<dyn Error>> {
+fn get_next_mouseclick_cords() -> Result<(i32, i32), Box<dyn Error>> {
     let mut stdout = String::from_utf8(
         Command::new("slurp")
             .arg("-p") // select a pixel instead of a rectangle
@@ -45,7 +42,9 @@ fn get_next_mouseclick_cords() -> Result<(u16, u16), Box<dyn Error>> {
         .split_once(',')
         .ok_or("Failed to find comma in slurp output")?;
 
-    Ok((x.parse()?, y.parse()?))
+    let (x, y): (i32, i32) = (x.parse()?, y.parse()?);
+
+    Ok((x / 2, y / 2))
 }
 
 fn unbind_all() {
@@ -95,9 +94,13 @@ fn record_macro() -> Result<Vec<MacroItem>, Box<dyn Error>> {
 }
 
 fn play_macro(macro_vec: Vec<MacroItem>) -> Result<(), Box<dyn Error>> {
+    use mouce::MouseActions;
+
     eprintln!("excecuting macro");
 
     let mut held_keys = Vec::<mki::Keyboard>::new();
+    let mouse = mouce::Mouse::new();
+    let mut last_pos = (0, 0);
     for i in macro_vec {
         if let MacroItem::Key(key) = i {
             if key == mki::Keyboard::LeftControl {
@@ -109,8 +112,11 @@ fn play_macro(macro_vec: Vec<MacroItem>) -> Result<(), Box<dyn Error>> {
                 held_keys.clear();
             }
         } else if let MacroItem::Mouse(button, x, y) = i {
-            Ydotool::move_mouse(x, y)?;
-            thread::sleep(Duration::from_millis(100));
+            if (x, y) != last_pos {
+                mouse.move_to(x, y)?;
+                thread::sleep(Duration::from_millis(300));
+                last_pos = (x, y);
+            }
             button.click();
         }
     }
@@ -139,7 +145,6 @@ fn main() {
     if let Some(action) = args.nth(1) {
         let macro_path = PathBuf::from(args.nth(1).unwrap_or("default".to_string()) + ".json");
         let (completion_sender, completion_reciever) = channel();
-        let _ydotool;
 
         match action.as_str() {
             "record" => {
@@ -154,11 +159,8 @@ fn main() {
                 );
             }
             "play" => {
-                // FIXME: possible race condition if the daemon doesn't start before the macro starts playing
-                _ydotool = Ydotool::start_daemon().unwrap();
-                thread::sleep(Duration::from_secs(1));
-
                 let file = File::open(&macro_path).unwrap();
+
                 mki::bind_key(
                     mki::Keyboard::F1,
                     mki::Action::handle_kb(move |_| {
@@ -176,7 +178,6 @@ fn main() {
         println!("Ready; Press F1 to start");
         completion_reciever.recv().unwrap();
     } else {
-        let _ydotool = Ydotool::start_daemon().unwrap();
         test();
         thread::sleep(Duration::MAX);
     }
