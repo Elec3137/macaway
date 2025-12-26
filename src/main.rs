@@ -6,7 +6,7 @@ use std::{
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
-        mpsc::channel,
+        mpsc,
     },
     thread::{self},
     time::Duration,
@@ -53,13 +53,13 @@ fn unbind_all() {
     mki::remove_key_bind(mki::Keyboard::F1);
 }
 
-fn record_macro() -> Result<Vec<MacroItem>, Box<dyn Error>> {
+fn record_macro() -> Result<Vec<MacroItem>, mpsc::RecvError> {
     let macro_vec_mutex = Arc::new(Mutex::new(Vec::<MacroItem>::new()));
 
     let ignore_esc = Arc::new(AtomicBool::new(false));
     let ignore_esc_ref = ignore_esc.clone();
 
-    let (completion_sender, complation_receiver) = channel();
+    let (completion_sender, complation_receiver) = mpsc::channel();
 
     let macro_vec_ref1 = macro_vec_mutex.clone();
     mki::bind_any_button(mki::Action::sequencing_mouse(
@@ -93,16 +93,16 @@ fn record_macro() -> Result<Vec<MacroItem>, Box<dyn Error>> {
     Ok(macro_vec_mutex.lock().unwrap().to_vec())
 }
 
-fn play_macro(macro_vec: Vec<MacroItem>) -> Result<(), Box<dyn Error>> {
+fn play_macro(macro_vec: Vec<MacroItem>) -> Result<(), mouce::error::Error> {
     use mouce::MouseActions;
 
-    eprintln!("excecuting macro");
-
     let mut held_keys = Vec::<mki::Keyboard>::new();
+
     let mouse = mouce::Mouse::new();
     let mut last_pos = (0, 0);
-    for i in macro_vec {
-        if let MacroItem::Key(key) = i {
+
+    for item in macro_vec {
+        if let MacroItem::Key(key) = item {
             if key == mki::Keyboard::LeftControl {
                 key.press();
                 held_keys.push(key);
@@ -111,7 +111,7 @@ fn play_macro(macro_vec: Vec<MacroItem>) -> Result<(), Box<dyn Error>> {
                 held_keys.iter().for_each(|key| key.release());
                 held_keys.clear();
             }
-        } else if let MacroItem::Mouse(button, x, y) = i {
+        } else if let MacroItem::Mouse(button, x, y) = item {
             if (x, y) != last_pos {
                 mouse.move_to(x, y)?;
                 thread::sleep(Duration::from_millis(300));
@@ -143,8 +143,8 @@ fn test() {
 fn main() {
     let mut args = std::env::args();
     if let Some(action) = args.nth(1) {
-        let macro_path = PathBuf::from(args.nth(1).unwrap_or("default".to_string()) + ".json");
-        let (completion_sender, completion_reciever) = channel();
+        let macro_path = PathBuf::from(args.nth(0).unwrap_or("default".to_string()) + ".json");
+        let (completion_sender, completion_reciever) = mpsc::channel();
 
         match action.as_str() {
             "record" => {
@@ -153,8 +153,21 @@ fn main() {
                 mki::bind_key(
                     mki::Keyboard::F1,
                     mki::Action::handle_kb(move |_| {
-                        serde_json::to_writer(&file, &record_macro().unwrap()).unwrap();
-                        completion_sender.send(0).unwrap();
+                        if let Ok(macro_vec) =
+                            record_macro().inspect_err(|e| eprintln!("failed to record macro: {e}"))
+                            && serde_json::to_writer(&file, &macro_vec)
+                                .inspect_err(|e| {
+                                    eprintln!(
+                                        "failed to write macro_vec to '{}': {e}",
+                                        macro_path.display()
+                                    )
+                                })
+                                .is_ok()
+                        {
+                            completion_sender.send(true).unwrap();
+                        } else {
+                            completion_sender.send(false).unwrap();
+                        }
                     }),
                 );
             }
@@ -164,8 +177,19 @@ fn main() {
                 mki::bind_key(
                     mki::Keyboard::F1,
                     mki::Action::handle_kb(move |_| {
-                        play_macro(serde_json::from_reader(&file).unwrap()).unwrap();
-                        completion_sender.send(0).unwrap();
+                        if let Ok(macro_vec) = serde_json::from_reader(&file).inspect_err(|e| {
+                            eprintln!(
+                                "failed to read macro_vec from '{}': {e}",
+                                macro_path.display()
+                            )
+                        }) && play_macro(macro_vec)
+                            .inspect_err(|e| eprintln!("failed to play macro: {e}"))
+                            .is_ok()
+                        {
+                            completion_sender.send(true).unwrap();
+                        } else {
+                            completion_sender.send(false).unwrap();
+                        }
                     }),
                 );
             }
