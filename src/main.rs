@@ -12,10 +12,14 @@ use std::{
     time::Duration,
 };
 
-use mki::{Action, Keyboard, Mouse};
-
 mod ydotool;
 use ydotool::Ydotool;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+enum MacroItem {
+    Mouse(mki::Mouse, u16, u16),
+    Key(mki::Keyboard),
+}
 
 /// Gets the cordinates of the next mouse click
 /// by launching `slurp` (which overlays the screen)
@@ -47,14 +51,11 @@ fn get_next_mouseclick_cords() -> Result<(u16, u16), Box<dyn Error>> {
 fn unbind_all() {
     mki::remove_any_button_bind();
     mki::remove_any_key_bind();
-    mki::remove_key_bind(Keyboard::F1);
+    mki::remove_key_bind(mki::Keyboard::F1);
 }
 
-fn record_macro() -> Result<Vec<(Option<Keyboard>, Option<(Mouse, u16, u16)>)>, Box<dyn Error>> {
-    let macro_vec_mutex = Arc::new(Mutex::new(Vec::<(
-        Option<Keyboard>,
-        Option<(Mouse, u16, u16)>,
-    )>::new()));
+fn record_macro() -> Result<Vec<MacroItem>, Box<dyn Error>> {
+    let macro_vec_mutex = Arc::new(Mutex::new(Vec::<MacroItem>::new()));
 
     let ignore_esc = Arc::new(AtomicBool::new(false));
     let ignore_esc_ref = ignore_esc.clone();
@@ -62,13 +63,13 @@ fn record_macro() -> Result<Vec<(Option<Keyboard>, Option<(Mouse, u16, u16)>)>, 
     let (completion_sender, complation_receiver) = channel();
 
     let macro_vec_ref1 = macro_vec_mutex.clone();
-    mki::bind_any_button(Action::sequencing_mouse(
+    mki::bind_any_button(mki::Action::sequencing_mouse(
         move |button| match get_next_mouseclick_cords() {
             Ok((x, y)) => {
                 macro_vec_ref1
                     .lock()
                     .unwrap()
-                    .push((None, Some((button, x, y))));
+                    .push(MacroItem::Mouse(button, x, y));
                 println!("Mouse button pressed {:?} at {},{}", button, x, y);
                 ignore_esc.store(true, Ordering::SeqCst);
             }
@@ -76,15 +77,15 @@ fn record_macro() -> Result<Vec<(Option<Keyboard>, Option<(Mouse, u16, u16)>)>, 
         },
     ));
     let macro_vec_ref2 = macro_vec_mutex.clone();
-    mki::bind_any_key(Action::sequencing_kb(move |key| {
-        if key == Keyboard::Escape && ignore_esc_ref.load(Ordering::SeqCst) {
+    mki::bind_any_key(mki::Action::sequencing_kb(move |key| {
+        if key == mki::Keyboard::Escape && ignore_esc_ref.load(Ordering::SeqCst) {
             eprintln!("Ignoring Escape key (slurp cancel keybind)");
             ignore_esc_ref.store(false, Ordering::SeqCst);
-        } else if key == Keyboard::F1 {
+        } else if key == mki::Keyboard::F1 {
             unbind_all();
             completion_sender.send(0).unwrap();
         } else {
-            macro_vec_ref2.lock().unwrap().push((Some(key), None));
+            macro_vec_ref2.lock().unwrap().push(MacroItem::Key(key));
             println!("Keyboard key pressed {:?}", key);
         }
     }));
@@ -93,15 +94,13 @@ fn record_macro() -> Result<Vec<(Option<Keyboard>, Option<(Mouse, u16, u16)>)>, 
     Ok(macro_vec_mutex.lock().unwrap().to_vec())
 }
 
-fn play_macro(
-    macro_vec: Vec<(Option<Keyboard>, Option<(Mouse, u16, u16)>)>,
-) -> Result<(), Box<dyn Error>> {
+fn play_macro(macro_vec: Vec<MacroItem>) -> Result<(), Box<dyn Error>> {
     eprintln!("excecuting macro");
 
-    let mut held_keys = Vec::<Keyboard>::new();
+    let mut held_keys = Vec::<mki::Keyboard>::new();
     for i in macro_vec {
-        if let Some(key) = i.0 {
-            if key == Keyboard::LeftControl {
+        if let MacroItem::Key(key) = i {
+            if key == mki::Keyboard::LeftControl {
                 key.press();
                 held_keys.push(key);
             } else {
@@ -109,10 +108,10 @@ fn play_macro(
                 held_keys.iter().for_each(|key| key.release());
                 held_keys.clear();
             }
-        } else if let Some(button) = i.1 {
-            Ydotool::move_mouse(button.1, button.2)?;
+        } else if let MacroItem::Mouse(button, x, y) = i {
+            Ydotool::move_mouse(x, y)?;
             thread::sleep(Duration::from_millis(100));
-            button.0.click();
+            button.click();
         }
     }
     Ok(())
@@ -120,8 +119,8 @@ fn play_macro(
 
 fn test() {
     mki::bind_key(
-        Keyboard::F1,
-        Action::handle_kb(|_| {
+        mki::Keyboard::F1,
+        mki::Action::handle_kb(|_| {
             unbind_all();
 
             let macro_vec = record_macro().unwrap();
@@ -132,7 +131,7 @@ fn test() {
             test();
         }),
     );
-    mki::bind_key(Keyboard::F2, Action::handle_kb(|_| exit(0)));
+    mki::bind_key(mki::Keyboard::F2, mki::Action::handle_kb(|_| exit(0)));
 }
 
 fn main() {
@@ -147,8 +146,8 @@ fn main() {
                 let file = File::create(&macro_path).unwrap(); // FIXME: use create_new to prevent overwriting of important macros
 
                 mki::bind_key(
-                    Keyboard::F1,
-                    Action::handle_kb(move |_| {
+                    mki::Keyboard::F1,
+                    mki::Action::handle_kb(move |_| {
                         serde_json::to_writer(&file, &record_macro().unwrap()).unwrap();
                         completion_sender.send(0).unwrap();
                     }),
@@ -161,8 +160,8 @@ fn main() {
 
                 let file = File::open(&macro_path).unwrap();
                 mki::bind_key(
-                    Keyboard::F1,
-                    Action::handle_kb(move |_| {
+                    mki::Keyboard::F1,
+                    mki::Action::handle_kb(move |_| {
                         play_macro(serde_json::from_reader(&file).unwrap()).unwrap();
                         completion_sender.send(0).unwrap();
                     }),

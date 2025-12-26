@@ -155,6 +155,7 @@ name = "macaway"
 version = "0.1.0"
 dependencies = [
  "mki",
+ "serde",
  "serde_json",
 ]
 
