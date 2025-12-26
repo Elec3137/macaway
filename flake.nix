@@ -7,23 +7,47 @@
     { self, nixpkgs, ... }:
     let
       pkgs = nixpkgs.legacyPackages."x86_64-linux";
+      cargoToml = (builtins.fromTOML (builtins.readFile ./Cargo.toml));
     in
     with pkgs;
     {
-      packages."x86_64-linux".default = rustPlatform.buildRustPackage {
-        pname = "macaway";
-        version = self.shortRev or self.dirtyShortRev;
+      packages."x86_64-linux".default = rustPlatform.buildRustPackage rec {
+        pname = cargoToml.package.name;
+        version = cargoToml.package.version;
+
         src = ./.;
+
         cargoLock = {
           lockFile = ./Cargo.lock;
         };
-        depsBuildBuild = [ pkg-config xorg.libX11 xorg.libXtst systemd libinput ];
-        depsHostHost = [ slurp ydotool libinput ];
+
+        nativeBuildInputs = [
+          makeBinaryWrapper
+          pkg-config
+
+          xorg.libX11
+          xorg.libXtst
+
+          systemd
+          libinput
+        ];
+
+        buildInputs = [
+          slurp
+          ydotool
+
+          libinput
+        ];
+
+        postFixup = ''
+          wrapProgram $out/bin/${pname} \
+            --prefix PATH : ${lib.makeBinPath [ slurp ydotool ]} \
+            --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ libinput ]}
+        '';
       };
 
       devShells."x86_64-linux".default = mkShell {
-        depsBuildBuild = [ pkg-config xorg.libX11 xorg.libXtst systemd libinput ];
-        depsHostHost = [ slurp ydotool libinput ];
+        inputsFrom = [ self.packages."x86_64-linux".default ];
       };
     };
 }
