@@ -35,13 +35,16 @@
         buildInputs = [
           slurp
 
+          xorg.libX11
+          xorg.libXtst
+
           libinput
         ];
 
         postFixup = ''
           wrapProgram $out/bin/${pname} \
             --prefix PATH : ${lib.makeBinPath [ slurp ]} \
-            --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ libinput ]}
+            --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath buildInputs}
         '';
       };
 
