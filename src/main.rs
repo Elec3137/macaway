@@ -102,7 +102,13 @@ fn play_macro(macro_vec: Vec<MacroItem>) -> Result<(), mouce::error::Error> {
 
     for item in macro_vec {
         if let MacroItem::Key(key) = item {
-            if key == mki::Keyboard::LeftControl {
+            if key == mki::Keyboard::LeftControl
+                || key == mki::Keyboard::LeftAlt
+                || key == mki::Keyboard::LeftWindows
+                || key == mki::Keyboard::RightControl
+                || key == mki::Keyboard::RightAlt
+                || key == mki::Keyboard::RightWindows
+            {
                 key.press();
                 held_keys.push(key);
             } else {
