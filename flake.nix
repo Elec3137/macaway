@@ -1,55 +1,86 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    crane.url = "github:ipetkov/crane";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs =
-    { self, nixpkgs, ... }:
-    let
-      pkgs = nixpkgs.legacyPackages."x86_64-linux";
-      cargoToml = (builtins.fromTOML (builtins.readFile ./Cargo.toml));
-    in
-    with pkgs;
     {
-      packages."x86_64-linux".default = rustPlatform.buildRustPackage rec {
-        pname = cargoToml.package.name;
-        version = cargoToml.package.version;
+      nixpkgs,
+      crane,
+      flake-utils,
+      ...
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = import nixpkgs { inherit system; };
+        craneLib = crane.mkLib pkgs;
 
-        src = ./.;
+        commonArgs = {
+          src = craneLib.cleanCargoSource ./.;
 
-        cargoLock = {
-          lockFile = ./Cargo.lock;
+          nativeBuildInputs = with pkgs; [
+            makeBinaryWrapper
+            pkg-config
+
+            xorg.libX11
+            xorg.libXtst
+
+            systemd
+            libinput
+          ];
+
+          buildInputs = with pkgs; [
+            slurp
+
+            xorg.libX11
+            xorg.libXtst
+
+            libinput
+          ];
         };
 
-        nativeBuildInputs = [
-          makeBinaryWrapper
-          pkg-config
+        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath commonArgs.buildInputs;
 
-          xorg.libX11
-          xorg.libXtst
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-          systemd
-          libinput
-        ];
+        pname = (fromTOML (builtins.readFile ./Cargo.toml)).package.name;
+        crate = craneLib.buildPackage (
+          commonArgs
+          // {
+            inherit cargoArtifacts;
 
-        buildInputs = [
-          slurp
+            postFixup = ''
+              wrapProgram $out/bin/${pname} \
+                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.slurp ]} \
+                --prefix LD_LIBRARY_PATH : ${LD_LIBRARY_PATH}
+            '';
+          }
+        );
+      in
+      {
+        packages.default = crate;
 
-          xorg.libX11
-          xorg.libXtst
+        checks = {
+          crate-clippy = craneLib.cargoClippy (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
 
-          libinput
-        ];
+              cargoClippyExtraArgs = "-- --deny warnings";
+            }
+          );
+        };
 
-        postFixup = ''
-          wrapProgram $out/bin/${pname} \
-            --prefix PATH : ${lib.makeBinPath [ slurp ]} \
-            --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath buildInputs}
-        '';
-      };
+        devShells.default = craneLib.devShell {
+          inherit LD_LIBRARY_PATH;
 
-      devShells."x86_64-linux".default = mkShell {
-        inputsFrom = [ self.packages."x86_64-linux".default ];
-      };
-    };
+          inputsFrom = [ crate ];
+          packages = [ pkgs.rust-analyzer ];
+        };
+      }
+    );
+
 }
